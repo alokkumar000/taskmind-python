@@ -1,4 +1,10 @@
-fastapi[standard]
-google-genai
-pydantic
-python-dotenv
+[project]
+name = "taskmind-python"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi[standard]",
+    "google-genai",
+    "pydantic",
+    "python-dotenv",
+]

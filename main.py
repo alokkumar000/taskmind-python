@@ -1,5 +1,4 @@
 import os
-import json
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -61,24 +60,37 @@ async def optimize_tasks(request: TaskRequest):
         "underlying productivity strategy behind this specific task order."
     )
 
-    try:
-        # 5. Request Structured Output using gemini-3.8-flash
-        response = client.models.generate_content(
-            model='gemini-3.8-flash',
-            contents=f"Optimize this task batch:\n{formatted_tasks}",
-            config=types.GenerateContentConfig(
-                system_instruction=system_instruction,
-                temperature=0.3,
-                response_mime_type="application/json",
-                response_schema=OptimizationResponseSchema,
+    models_to_try = ("gemini-3.8-flash", "gemini-2.5-flash")
+    last_exception = None
+
+    for model_name in models_to_try:
+        try:
+            response = client.models.generate_content(
+                model=model_name,
+                contents=f"Optimize this task batch:\n{formatted_tasks}",
+                config=types.GenerateContentConfig(
+                    system_instruction=system_instruction,
+                    temperature=0.3,
+                    response_mime_type="application/json",
+                    response_schema=OptimizationResponseSchema,
+                ),
             )
-        )
 
-        if response.text:
-            parsed_json = json.loads(response.text)
-            return parsed_json
-        else:
+            if response.parsed is not None:
+                return OptimizationResponseSchema.model_validate(
+                    response.parsed
+                ).model_dump()
+
+            if response.text:
+                return OptimizationResponseSchema.model_validate_json(
+                    response.text
+                ).model_dump()
+
             raise ValueError("Empty generation block returned from provider.")
+        except Exception as e:
+            last_exception = e
 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Structured AI Pipeline Fail: {str(e)}")
+    raise HTTPException(
+        status_code=500,
+        detail=f"Structured AI Pipeline Fail: {str(last_exception)}",
+    )
